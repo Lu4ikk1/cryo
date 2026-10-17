@@ -1,5 +1,5 @@
 --==============================================================
--- Cryo Loader: AC bypass + preloader + загрузка основного
+-- Cryo Loader: AC bypass (старый способ) + preloader + загрузка
 --==============================================================
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -9,47 +9,42 @@ local LocalPlayer = Players.LocalPlayer
 local MAIN_URL = "https://raw.githubusercontent.com/Lu4ikk1/cryo/refs/heads/main/TOWNCRYO"
 
 --==============================================================
--- 1. AC BYPASS
+-- 1. AC BYPASS (старый способ: coroutine.yield + разовый скан)
 --==============================================================
 task.spawn(function()
-    local hooked = {}
-    local lastGcCount = 0
-    local lastScanAt = tick()
-
-    local function scan()
-        local gc = getgc(true)
-        if type(gc) ~= "table" then return end
-
-        for _, v in pairs(gc) do
-            if type(v) ~= "table" then continue end
-
-            local detected = rawget(v, "Detected")
-            if type(detected) == "function" and not hooked[detected] then
-                hooked[detected] = true
-                pcall(hookfunction, detected, function() return end)
-            end
-
-            local kill = rawget(v, "Kill")
-            if type(kill) == "function" and not hooked[kill] then
-                hooked[kill] = true
-                pcall(hookfunction, kill, function() return end)
+    task.wait(0.5)
+    local detectedFunc
+    for _, v in pairs(getgc(true)) do
+        if type(v) == "table" then
+            local ok, d = pcall(rawget, v, "Detected")
+            if ok and type(d) == "function" then
+                detectedFunc = d
+                break
             end
         end
-
-        lastGcCount = #gc
     end
-
-    scan()
-
-    while true do
-        task.wait(0.5)
-        local gc = getgc(true)
-        local count = type(gc) == "table" and #gc or 0
-
-        if count > lastGcCount or tick() - lastScanAt > 5 then
-            scan()
-            lastScanAt = tick()
+    if detectedFunc then
+        pcall(function()
+            hookfunction(detectedFunc, function(...)
+                coroutine.yield()
+            end)
+        end)
+    end
+    task.wait()
+    local kills = {}
+    for _, v in pairs(getgc(true)) do
+        if type(v) == "table" then
+            local ok, k = pcall(rawget, v, "Kill")
+            if ok and type(k) == "function" then
+                table.insert(kills, k)
+            end
         end
+    end
+    for _, k in ipairs(kills) do
+        pcall(function()
+            hookfunction(k, function(...) end)
+        end)
+        task.wait()
     end
 end)
 
@@ -132,10 +127,8 @@ local function fadeOut()
 end
 
 --==============================================================
--- 3. ЗАГРУЗКА ОСНОВНОГО СКРИПТА (в отдельном потоке)
+-- 3. ЗАГРУЗКА ОСНОВНОГО СКРИПТА
 --==============================================================
-local loadSuccess = false
-
 task.spawn(function()
     local ok, err = pcall(function()
         local code = game:HttpGet(MAIN_URL)
@@ -146,9 +139,7 @@ task.spawn(function()
         fn()
     end)
 
-    if ok then
-        loadSuccess = true
-    else
+    if not ok then
         warn("[Cryo] Ошибка загрузки основного скрипта:", err)
         title.Text = "Load error"
         title.TextColor3 = Color3.fromRGB(255, 80, 80)
@@ -163,14 +154,12 @@ while not _G.CryoLibScreenGui and tick() < timeout do
     task.wait(0.1)
 end
 
--- Если не дождались — показываем ошибку
 if not _G.CryoLibScreenGui then
     title.Text = "UI not found"
     title.TextColor3 = Color3.fromRGB(255, 80, 80)
     task.wait(2)
 end
 
--- Даём UI время отрисоваться
 task.wait(0.5)
 
 --==============================================================
