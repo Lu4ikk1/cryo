@@ -1,9 +1,16 @@
+--==============================================================
+-- Cryo Loader: AC bypass + preloader + загрузка основного
+--==============================================================
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
+-- URL основного скрипта
 local MAIN_URL = "https://raw.githubusercontent.com/Lu4ikk1/cryo/refs/heads/main/TOWNCRYO"
 
+--==============================================================
+-- 1. AC BYPASS
+--==============================================================
 task.spawn(function()
     local hooked = {}
     local lastGcCount = 0
@@ -46,6 +53,9 @@ task.spawn(function()
     end
 end)
 
+--==============================================================
+-- 2. PRELOADER
+--==============================================================
 local ACCENT = Color3.fromRGB(120, 170, 255)
 local BG_DARK = Color3.fromRGB(18, 18, 24)
 
@@ -116,28 +126,56 @@ local function fadeOut()
         end
     end
     task.wait(0.4)
-    preloader:Destroy()
+    if preloader and preloader.Parent then
+        preloader:Destroy()
+    end
 end
 
-task.wait(0.3) -- даём прелоадеру отрисоваться
+--==============================================================
+-- 3. ЗАГРУЗКА ОСНОВНОГО СКРИПТА (в отдельном потоке)
+--==============================================================
+local loadSuccess = false
 
-local ok, err = pcall(function()
-    local code = game:HttpGet(MAIN_URL)
-    local fn, loadErr = loadstring(code)
-    if not fn then
-        error("loadstring failed: " .. tostring(loadErr))
+task.spawn(function()
+    local ok, err = pcall(function()
+        local code = game:HttpGet(MAIN_URL)
+        local fn, loadErr = loadstring(code)
+        if not fn then
+            error("loadstring failed: " .. tostring(loadErr))
+        end
+        fn()
+    end)
+
+    if ok then
+        loadSuccess = true
+    else
+        warn("[Cryo] Ошибка загрузки основного скрипта:", err)
+        title.Text = "Load error"
+        title.TextColor3 = Color3.fromRGB(255, 80, 80)
     end
-    fn()
 end)
 
-if not ok then
-    warn("[Cryo] Ошибка загрузки основного скрипта:", err)
-    title.Text = "Load error"
+--==============================================================
+-- 4. ЖДЁМ СОЗДАНИЯ UI (до 10 сек)
+--==============================================================
+local timeout = tick() + 10
+while not _G.CryoLibScreenGui and tick() < timeout do
+    task.wait(0.1)
+end
+
+-- Если не дождались — показываем ошибку
+if not _G.CryoLibScreenGui then
+    title.Text = "UI not found"
     title.TextColor3 = Color3.fromRGB(255, 80, 80)
     task.wait(2)
 end
 
+-- Даём UI время отрисоваться
 task.wait(0.5)
+
+--==============================================================
+-- 5. СКРЫТЬ ПРЕЛОАДЕР + ПОКАЗАТЬ UI
+--==============================================================
 fadeOut()
 
 if _G.CryoLibScreenGui then
@@ -146,5 +184,9 @@ end
 
 return {
     Hide = fadeOut,
-    Destroy = function() preloader:Destroy() end
+    Destroy = function()
+        if preloader and preloader.Parent then
+            preloader:Destroy()
+        end
+    end
 }
