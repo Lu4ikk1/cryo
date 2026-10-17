@@ -710,12 +710,3 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 pcall(updateFOVCircle)
-
---==============================================================
--- HIDE PRELOADER + SHOW UI
---==============================================================
-task.wait(1)
-preloader.Hide()
-if _G.CryoLibScreenGui then
-    _G.CryoLibScreenGui.Enabled = true
-end
