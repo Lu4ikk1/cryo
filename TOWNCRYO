@@ -118,11 +118,14 @@ InfoTab:CreateKeybind("UI Key", Settings.UIKey, function(key)
 end)
 
 --==============================================================
--- FOV CIRCLE
+-- FOV CIRCLE (фикс: появляется сразу, защита от Drawing = nil)
 --==============================================================
 local FOVCircle
 function updateFOVCircle()
-    if FOVCircle then pcall(function() FOVCircle:Remove() end); FOVCircle = nil end
+    if FOVCircle then
+        pcall(function() FOVCircle:Remove() end)
+        FOVCircle = nil
+    end
     if not (Settings.SilentAim and Settings.SilentAimFOVCircle) then return end
     if not Drawing or not Drawing.new then return end
 
@@ -130,6 +133,7 @@ function updateFOVCircle()
     if not ok or not circle then return end
 
     FOVCircle = circle
+    FOVCircle.Visible = true
     FOVCircle.Thickness = 1.5
     FOVCircle.Transparency = 0.7
     FOVCircle.ZIndex = 10
@@ -512,7 +516,7 @@ function setInstantReload(v)
 end
 
 --==============================================================
--- NO SPREAD
+-- NO SPREAD (фикс: scatter = 0.0001, AimScatterMultiplyer не трогаем)
 --==============================================================
 local noSpreadActive = false
 local noSpreadConnections = {}
@@ -599,7 +603,7 @@ function removeCrosshair()
 end
 
 --==============================================================
--- SILENT AIM
+-- SILENT AIM target (фикс Wall Check + проверка Character)
 --==============================================================
 local silentTarget
 
