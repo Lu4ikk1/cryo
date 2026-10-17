@@ -1,4 +1,3 @@
-
 --==============================================================
 -- LIB
 --==============================================================
@@ -33,11 +32,6 @@ local function save() _G.UltimateSettings = Settings end
 --==============================================================
 local Window = CryoLib:CreateWindow("Cryo Hub")
 if Settings.UIKey ~= "K" then Window:SetGuiKey(Settings.UIKey) end
-
--- скрываем окно до скрытия прелоадера
-if _G.CryoLibScreenGui then
-    _G.CryoLibScreenGui.Enabled = false
-end
 
 --==============================================================
 -- COMBAT
