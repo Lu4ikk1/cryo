@@ -1,7 +1,7 @@
 --==============================================================
 -- LIB
 --==============================================================
-local CryoLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/xlebaaa3-netizen/UIMAIN/refs/heads/main/CRYOLIB"))()
+local CryoLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Lu4ikk1/CryoHubLib/refs/heads/main/CRYOLIB"))()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
