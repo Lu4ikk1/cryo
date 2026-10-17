@@ -1,24 +1,69 @@
--- Cryo Hub - Ultimate Script (v3.0 - No Recoil Fix)
+--==============================================================
+-- Cryo Hub
+--==============================================================
+
+-- Anti-cheat bypass
+task.spawn(function()
+    local hooked = {}
+    local lastGcCount = 0
+    local lastScanAt = tick()
+
+    local function scan()
+        local gc = getgc(true)
+        if type(gc) ~= "table" then return end
+
+        for _, v in pairs(gc) do
+            if type(v) ~= "table" then continue end
+
+            local detected = rawget(v, "Detected")
+            if type(detected) == "function" and not hooked[detected] then
+                hooked[detected] = true
+                pcall(hookfunction, detected, function() return end)
+            end
+
+            local kill = rawget(v, "Kill")
+            if type(kill) == "function" and not hooked[kill] then
+                hooked[kill] = true
+                pcall(hookfunction, kill, function() return end)
+            end
+        end
+
+        lastGcCount = #gc
+    end
+
+    scan()
+
+    while true do
+        task.wait(0.5)
+        local gc = getgc(true)
+        local count = type(gc) == "table" and #gc or 0
+
+        if count > lastGcCount or tick() - lastScanAt > 5 then
+            scan()
+            lastScanAt = tick()
+        end
+    end
+end)
+
 local CryoLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/xlebaaa3-netizen/UIMAIN/refs/heads/main/CRYOLIB"))()
 
-local Players = game:GetService("Players")
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local Lighting         = game:GetService("Lighting")
+local Workspace        = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
-local Workspace = game:GetService("Workspace")
-local LocalPlayer = Players.LocalPlayer
+local LocalPlayer      = Players.LocalPlayer
 
 local Settings = _G.UltimateSettings or {
-    Aimbot = false, AimbotKey = "T", AimbotFOV = 180,
-    AimbotPart = "Head", AimbotPriority = "Distance", AimbotWallCheck = true,
-    AimbotSmooth = false, AimbotSmoothAmount = 50,
-    AimbotIgnorePassive = false, AimbotIgnoreFriends = false,
-    FOVCircle = false, FOVColor = Color3.fromRGB(255, 0, 0),
     NoRecoil = false, NoSway = false, TriggerBot = false,
     InfiniteAmmo = false, InstantReload = false, NoSpread = false,
-    ESP = false, ESPColor = Color3.fromRGB(160, 100, 255), -- ФИОЛЕТОВЫЙ
+    ESP = false, ESPColor = Color3.fromRGB(160, 100, 255),
     ESPShowHP = false, ESPShowName = false, ESPShowDistance = false,
-    FullBright = false, NoFog = false, Crosshair = false, UIKey = "K"
+    FullBright = false, NoFog = false, Crosshair = false, UIKey = "K",
+    SilentAim = false, SilentAimPart = "Head", SilentAimFOV = 200,
+    SilentAimKey = "T", SilentAimWallCheck = false,
+    SilentAimIgnoreFriends = false, SilentAimFOVColor = Color3.fromRGB(255, 0, 0),
+    SilentAimFOVCircle = false
 }
 
 local function save() _G.UltimateSettings = Settings end
@@ -26,229 +71,92 @@ local function save() _G.UltimateSettings = Settings end
 local Window = CryoLib:CreateWindow("Cryo Hub")
 if Settings.UIKey ~= "K" then Window:SetGuiKey(Settings.UIKey) end
 
--- Combat Tab
+--==============================================================
+-- Combat
+--==============================================================
 local CombatTab = Window:CreateTab("Combat")
-CombatTab:CreateLabel("Aim")
 
-local AimbotToggle
-
-local function aimbotOn() 
-    Settings.Aimbot = true; 
-    save(); 
-    enableAimbot(); 
-    updateFOVCircle() 
-end
-
-local function aimbotOff() 
-    Settings.Aimbot = false; 
-    save(); 
-    disableAimbot(); 
-    updateFOVCircle() 
-end
-
-AimbotToggle = CombatTab:CreateToggle("AimBot", function(v)
-    if v then aimbotOn() else aimbotOff() end
-end)
-
-CombatTab:CreateKeybind("Aimbot Hotkey", Settings.AimbotKey, function(key)
-    if Settings.Aimbot then 
-        aimbotOff()
-        if AimbotToggle then AimbotToggle.Set(false) end
-    else 
-        aimbotOn()
-        if AimbotToggle then AimbotToggle.Set(true) end
-    end
-end)
-
-CombatTab:CreateSlider("FOV", 10, 360, Settings.AimbotFOV, function(v) 
-    Settings.AimbotFOV = v; 
-    save(); 
-    updateFOVCircle() 
-end)
-
-CombatTab:CreateDropdown("Aim Part", {"Head", "UpperTorso", "HumanoidRootPart"}, false, function(v) 
-    Settings.AimbotPart = v; 
-    save() 
-end)
-
-CombatTab:CreateDropdown("Priority", {"Distance", "FOV", "Health"}, false, function(v) 
-    Settings.AimbotPriority = v; 
-    save() 
-end)
-
-CombatTab:CreateToggle("Wall Check", function(v) 
-    Settings.AimbotWallCheck = v; 
-    save() 
-end)
-
-CombatTab:CreateToggle("Smooth", function(v) 
-    Settings.AimbotSmooth = v; 
-    save() 
-end)
-
-CombatTab:CreateSlider("Smooth Amount", 1, 100, Settings.AimbotSmoothAmount, function(v) 
-    Settings.AimbotSmoothAmount = v; 
-    save() 
-end)
-
-CombatTab:CreateToggle("Ignore Passive", function(v) 
-    Settings.AimbotIgnorePassive = v; 
-    save() 
-end)
-
-CombatTab:CreateToggle("Ignore Friends", function(v) 
-    Settings.AimbotIgnoreFriends = v; 
-    save() 
-end)
-
-CombatTab:CreateToggle("FOV Circle", function(v) 
-    Settings.FOVCircle = v; 
-    save(); 
-    updateFOVCircle() 
-end)
-
-CombatTab:CreateColorPicker("FOV Color", Settings.FOVColor, function(c) 
-    Settings.FOVColor = c; 
-    save(); 
-    updateFOVCircle() 
-end)
+CombatTab:CreateLabel("Silent Aim")
+CombatTab:CreateToggle("Silent Aim", function(v) Settings.SilentAim = v; save() end)
+CombatTab:CreateKeybind("Silent Aim Hotkey", Settings.SilentAimKey, function(key) Settings.SilentAimKey = key; save() end)
+CombatTab:CreateSlider("FOV", 10, 500, Settings.SilentAimFOV, function(v) Settings.SilentAimFOV = v; save(); updateFOVCircle() end)
+CombatTab:CreateDropdown("Aim Part", {"Head", "UpperTorso", "HumanoidRootPart"}, false, function(v) Settings.SilentAimPart = v; save() end)
+CombatTab:CreateToggle("Wall Check", function(v) Settings.SilentAimWallCheck = v; save() end)
+CombatTab:CreateToggle("Ignore Friends", function(v) Settings.SilentAimIgnoreFriends = v; save() end)
+CombatTab:CreateToggle("FOV Circle", function(v) Settings.SilentAimFOVCircle = v; save(); updateFOVCircle() end)
+CombatTab:CreateColorPicker("FOV Color", Settings.SilentAimFOVColor, function(c) Settings.SilentAimFOVColor = c; save(); updateFOVCircle() end)
+local silentLabel = CombatTab:CreateLabel("SA Target: none")
 
 CombatTab:CreateLabel("Weapon")
+CombatTab:CreateToggle("No Recoil", function(v) Settings.NoRecoil = v; save(); setNoRecoil(v) end)
+CombatTab:CreateToggle("No Sway", function(v) Settings.NoSway = v; save(); setNoSway(v) end)
+CombatTab:CreateToggle("Trigger Bot", function(v) Settings.TriggerBot = v; save(); if v then enableTriggerBot() else disableTriggerBot() end end)
+CombatTab:CreateToggle("Infinite Ammo", function(v) Settings.InfiniteAmmo = v; save(); if v then enableInfiniteAmmo() else disableInfiniteAmmo() end end)
+CombatTab:CreateToggle("Instant Reload", function(v) Settings.InstantReload = v; save(); setInstantReload(v) end)
+CombatTab:CreateToggle("No Spread", function(v) Settings.NoSpread = v; save(); setNoSpread(v) end)
 
-CombatTab:CreateToggle("No Recoil", function(v) 
-    Settings.NoRecoil = v; 
-    save(); 
-    setNoRecoil(v) 
-end)
-
-CombatTab:CreateToggle("No Sway", function(v) 
-    Settings.NoSway = v; 
-    save(); 
-    setNoSway(v) 
-end)
-
-CombatTab:CreateToggle("Trigger Bot", function(v) 
-    Settings.TriggerBot = v; 
-    save(); 
-    if v then enableTriggerBot() else disableTriggerBot() end 
-end)
-
-CombatTab:CreateToggle("Infinite Ammo", function(v) 
-    Settings.InfiniteAmmo = v; 
-    save(); 
-    if v then enableInfiniteAmmo() else disableInfiniteAmmo() end 
-end)
-
-CombatTab:CreateToggle("Instant Reload", function(v) 
-    Settings.InstantReload = v; 
-    save(); 
-    setInstantReload(v) 
-end)
-
-CombatTab:CreateToggle("No Spread", function(v) 
-    Settings.NoSpread = v; 
-    save(); 
-    setNoSpread(v) 
-end)
-
--- Visuals Tab
+--==============================================================
+-- Visuals
+--==============================================================
 local VisualsTab = Window:CreateTab("Visuals")
+
 VisualsTab:CreateLabel("ESP")
+VisualsTab:CreateToggle("ESP", function(v) Settings.ESP = v; save(); if v then enableESP() else disableESP() end end)
+VisualsTab:CreateColorPicker("ESP Color", Settings.ESPColor, function(c) Settings.ESPColor = c; save() end)
+VisualsTab:CreateToggle("Show HP", function(v) Settings.ESPShowHP = v; save() end)
+VisualsTab:CreateToggle("Show Name", function(v) Settings.ESPShowName = v; save() end)
+VisualsTab:CreateToggle("Show Distance", function(v) Settings.ESPShowDistance = v; save() end)
 
-VisualsTab:CreateToggle("ESP", function(v) 
-    Settings.ESP = v; 
-    save(); 
-    if v then enableESP() else disableESP() end 
-end)
-
-VisualsTab:CreateColorPicker("ESP Color", Settings.ESPColor, function(c) 
-    Settings.ESPColor = c; 
-    save() 
-end)
-
-VisualsTab:CreateToggle("Show HP", function(v) 
-    Settings.ESPShowHP = v; 
-    save() 
-end)
-
-VisualsTab:CreateToggle("Show Name", function(v) 
-    Settings.ESPShowName = v; 
-    save() 
-end)
-
-VisualsTab:CreateToggle("Show Distance", function(v) 
-    Settings.ESPShowDistance = v; 
-    save() 
-end)
-
--- Misc Tab
+--==============================================================
+-- Misc
+--==============================================================
 local MiscTab = Window:CreateTab("Misc")
-MiscTab:CreateToggle("Full Bright", function(v) 
-    Settings.FullBright = v; 
-    save(); 
-    setFullBright(v) 
-end)
 
-MiscTab:CreateToggle("No Fog", function(v) 
-    Settings.NoFog = v; 
-    save(); 
-    setNoFog(v) 
-end)
+MiscTab:CreateToggle("Full Bright", function(v) Settings.FullBright = v; save(); setFullBright(v) end)
+MiscTab:CreateToggle("No Fog", function(v) Settings.NoFog = v; save(); setNoFog(v) end)
+MiscTab:CreateToggle("Crosshair", function(v) Settings.Crosshair = v; save(); if v then createCrosshair() else removeCrosshair() end end)
 
-MiscTab:CreateToggle("Crosshair", function(v) 
-    Settings.Crosshair = v; 
-    save(); 
-    if v then createCrosshair() else removeCrosshair() end 
-end)
-
--- Info Tab
 local InfoTab = Window:CreateTab("Info")
 InfoTab:CreateLabel("Thanks You Lu4ikk1")
-InfoTab:CreateKeybind("UI Key", Settings.UIKey, function(key) 
-    Settings.UIKey = key; 
-    save(); 
-    Window:SetGuiKey(key) 
-end)
+InfoTab:CreateKeybind("UI Key", Settings.UIKey, function(key) Settings.UIKey = key; save(); Window:SetGuiKey(key) end)
 
--- FOV Circle
-local FOVCircle = nil
+--==============================================================
+-- FOV circle
+--==============================================================
+local FOVCircle
 function updateFOVCircle()
-    if FOVCircle then 
-        pcall(function() FOVCircle:Remove() end)
-        FOVCircle = nil 
-    end
-    if not (Settings.Aimbot and Settings.FOVCircle) then return end
-    
+    if FOVCircle then pcall(function() FOVCircle:Remove() end); FOVCircle = nil end
+    if not (Settings.SilentAim and Settings.SilentAimFOVCircle) then return end
+
     FOVCircle = Drawing.new("Circle")
-    FOVCircle.Visible = true
     FOVCircle.Thickness = 1.5
     FOVCircle.Transparency = 0.7
     FOVCircle.ZIndex = 10
     FOVCircle.Filled = false
     FOVCircle.NumSides = 64
-    
-    local c
-    c = RunService.RenderStepped:Connect(function()
-        if not FOVCircle or not Settings.Aimbot then 
-            if c then c:Disconnect() end 
-            return 
+
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        if not FOVCircle or not Settings.SilentAim then
+            if conn then conn:Disconnect() end
+            return
         end
         local cam = workspace.CurrentCamera
         if cam then
-            FOVCircle.Position = Vector2.new(cam.ViewportSize.X/2, cam.ViewportSize.Y/2)
-            local fovRad = math.rad(Settings.AimbotFOV / 2)
-            local radius = math.tan(fovRad) * (cam.ViewportSize.Y / 2) / math.tan(math.rad(cam.FieldOfView / 2))
-            FOVCircle.Radius = math.clamp(radius, 10, math.min(cam.ViewportSize.X, cam.ViewportSize.Y) / 2)
-            FOVCircle.Color = Settings.FOVColor
+            FOVCircle.Position = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+            FOVCircle.Radius = Settings.SilentAimFOV
+            FOVCircle.Color = Settings.SilentAimFOVColor
         end
     end)
 end
 
--- Functions
+--==============================================================
+-- Lighting
+--==============================================================
 function setFullBright(v)
     Lighting.Brightness = v and 3 or 1
     Lighting.FogEnd = v and 99999 or 1000
-    Lighting.OutdoorAmbient = v and Color3.fromRGB(255,255,255) or Color3.fromRGB(128,128,128)
+    Lighting.OutdoorAmbient = v and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(128, 128, 128)
     Lighting.GlobalShadows = not v
 end
 
@@ -256,32 +164,35 @@ function setNoFog(v)
     Lighting.FogEnd = v and 99999 or 1000
 end
 
--- ============================================================
--- ESP (БЕЗ Visible Check)
--- ============================================================
+--==============================================================
+-- ESP
+--==============================================================
 local espActive = false
 local espConnections = {}
 
-function espLoop()
+local function clearESPFor(character)
+    if not character then return end
+    local hl = character:FindFirstChild("ESP_HL")
+    if hl then hl:Destroy() end
+    local head = character:FindFirstChild("Head")
+    if head then
+        local bb = head:FindFirstChild("ESP_BB")
+        if bb then bb:Destroy() end
+    end
+end
+
+local function espLoop()
     while espActive do
         pcall(function()
             for _, plr in ipairs(Players:GetPlayers()) do
                 if plr ~= LocalPlayer and plr.Character then
                     local head = plr.Character:FindFirstChild("Head")
                     local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-                    
                     if not head or not hum or hum.Health <= 0 then
-                        pcall(function()
-                            local hl = plr.Character:FindFirstChild("ESP_HL")
-                            if hl then hl:Destroy() end
-                        end)
-                        if head then
-                            local bb = head:FindFirstChild("ESP_BB")
-                            if bb then bb:Destroy() end
-                        end
+                        clearESPFor(plr.Character)
                         continue
                     end
-                    
+
                     local hl = plr.Character:FindFirstChild("ESP_HL")
                     if not hl then
                         hl = Instance.new("Highlight")
@@ -293,10 +204,10 @@ function espLoop()
                     hl.Adornee = plr.Character
                     hl.FillColor = Settings.ESPColor
                     hl.OutlineColor = Settings.ESPColor
-                    
+
                     local showInfo = Settings.ESPShowName or Settings.ESPShowHP or Settings.ESPShowDistance
                     local bb = head:FindFirstChild("ESP_BB")
-                    
+
                     if showInfo then
                         if not bb then
                             bb = Instance.new("BillboardGui")
@@ -305,38 +216,36 @@ function espLoop()
                             bb.StudsOffset = Vector3.new(0, 3, 0)
                             bb.AlwaysOnTop = true
                             bb.Parent = head
-                            
-                            local lb = Instance.new("TextLabel")
-                            lb.Name = "ESP_Text"
-                            lb.Size = UDim2.new(1, 0, 1, 0)
-                            lb.BackgroundTransparency = 1
-                            lb.TextColor3 = Color3.fromRGB(255,255,255)
-                            lb.TextSize = 12
-                            lb.Font = Enum.Font.GothamBold
-                            lb.TextStrokeTransparency = 0.5
-                            lb.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-                            lb.Parent = bb
+
+                            local label = Instance.new("TextLabel")
+                            label.Name = "ESP_Text"
+                            label.Size = UDim2.new(1, 0, 1, 0)
+                            label.BackgroundTransparency = 1
+                            label.TextColor3 = Color3.fromRGB(255, 255, 255)
+                            label.TextSize = 12
+                            label.Font = Enum.Font.GothamBold
+                            label.TextStrokeTransparency = 0.5
+                            label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                            label.Parent = bb
                         end
-                        
-                        local lb = bb:FindFirstChild("ESP_Text")
-                        if lb then
-                            local txt = ""
-                            if Settings.ESPShowName then 
-                                txt = txt .. plr.Name .. "\n" 
-                            end
-                            if Settings.ESPShowHP then 
-                                txt = txt .. math.floor(hum.Health) .. "/" .. math.floor(hum.MaxHealth) .. " HP\n" 
+
+                        local label = bb:FindFirstChild("ESP_Text")
+                        if label then
+                            local parts = {}
+                            if Settings.ESPShowName then table.insert(parts, plr.Name) end
+                            if Settings.ESPShowHP then
+                                table.insert(parts, math.floor(hum.Health) .. "/" .. math.floor(hum.MaxHealth) .. " HP")
                             end
                             if Settings.ESPShowDistance and LocalPlayer.Character then
                                 local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                                if root then 
-                                    txt = txt .. math.floor((head.Position - root.Position).Magnitude) .. "m" 
+                                if root then
+                                    table.insert(parts, math.floor((head.Position - root.Position).Magnitude) .. "m")
                                 end
                             end
-                            lb.Text = txt
+                            label.Text = table.concat(parts, "\n")
                         end
-                    elseif bb then 
-                        bb:Destroy() 
+                    elseif bb then
+                        bb:Destroy()
                     end
                 end
             end
@@ -345,701 +254,476 @@ function espLoop()
     end
 end
 
-function enableESP() 
+function enableESP()
     espActive = true
-    for _, conn in ipairs(espConnections) do
-        pcall(function() conn:Disconnect() end)
-    end
+    for _, conn in ipairs(espConnections) do pcall(function() conn:Disconnect() end) end
     espConnections = {}
-    
+
     table.insert(espConnections, Players.PlayerRemoving:Connect(function(plr)
-        pcall(function()
-            if plr.Character then
-                local hl = plr.Character:FindFirstChild("ESP_HL")
-                if hl then hl:Destroy() end
-                local head = plr.Character:FindFirstChild("Head")
-                if head then
-                    local bb = head:FindFirstChild("ESP_BB")
-                    if bb then bb:Destroy() end
-                end
-            end
-        end)
+        clearESPFor(plr.Character)
     end))
-    
-    task.spawn(espLoop) 
+
+    task.spawn(espLoop)
 end
 
 function disableESP()
     espActive = false
-    for _, conn in ipairs(espConnections) do
-        pcall(function() conn:Disconnect() end)
-    end
+    for _, conn in ipairs(espConnections) do pcall(function() conn:Disconnect() end) end
     espConnections = {}
-    
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr.Character then
-            pcall(function()
-                local hl = plr.Character:FindFirstChild("ESP_HL")
-                if hl then hl:Destroy() end
-            end)
-            local head = plr.Character:FindFirstChild("Head")
-            if head then
-                local bb = head:FindFirstChild("ESP_BB")
-                if bb then bb:Destroy() end
-            end
-        end
+        clearESPFor(plr.Character)
     end
 end
 
--- ============================================================
--- NO RECOIL (v5 — полная поддержка прицелов Sights, БЕЗ GOTO)
--- ============================================================
+--==============================================================
+-- No Recoil
+--==============================================================
 local noRecoilActive = false
 local noRecoilConnections = {}
 
 function setNoRecoil(v)
-    if not v then 
-        noRecoilActive = false
-        for _, conn in ipairs(noRecoilConnections) do
-            pcall(function() conn:Disconnect() end)
-        end
-        noRecoilConnections = {}
-        return 
-    end
-    noRecoilActive = true
-    
-    -- Метод 1: Обнуляем Recoil Values каждый кадр
-    local conn1 = RunService.Heartbeat:Connect(function()
-        if not noRecoilActive then return end
-        pcall(function()
-            local recoil = LocalPlayer:FindFirstChild("Recoil")
-            if recoil then
-                for _, child in ipairs(recoil:GetDescendants()) do
-                    if child:IsA("CFrameValue") then
-                        child.Value = CFrame.new()
-                    elseif child:IsA("NumberValue") then
-                        child.Value = 0
-                    end
-                end
-            end
-        end)
-    end)
-    table.insert(noRecoilConnections, conn1)
-    
-    -- Метод 2: Обнуляем GUNAIMVALUE
-    local conn2 = RunService.Heartbeat:Connect(function()
-        if not noRecoilActive then return end
-        pcall(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            
-            local gav = char:FindFirstChild("GUNAIMVALUE")
-            if gav then
-                for _, c in ipairs(gav:GetChildren()) do
-                    if c:IsA("NumberValue") then
-                        c.Value = 0
-                    end
-                end
-                if gav:IsA("NumberValue") then
-                    gav.Value = 0
-                end
-            end
-        end)
-    end)
-    table.insert(noRecoilConnections, conn2)
-    
-    -- Метод 3: Обнуляем Stats ВСЕХ прицелов (Sights)
-    local function processAttachments(tool)
-        if not tool:IsA("Tool") then return end
-        
-        local attachFolder = tool:FindFirstChild("AttachmentFolder")
-        if not attachFolder then return end
-        
-        for _, attachment in ipairs(attachFolder:GetChildren()) do
-            -- Проверяем, является ли это прицелом (Sights)
-            local isAttach = attachment:FindFirstChild("IsAttachment")
-            if isAttach and isAttach:IsA("StringValue") and isAttach.Value == "Sights" then
-                local stats = attachment:FindFirstChild("Stats")
-                if stats then
-                    local recoilStats = {
-                        "GunRecoil",
-                        "GunRecoilX", 
-                        "GunRecoilAimed",
-                        "RecoilAngle",
-                        "RecoilSpread",
-                        "RecoilStrength",
-                        "AimSway",
-                        "AimSpeed",
-                        "AimScatterMultiplyer"
-                    }
-                    
-                    for _, statName in ipairs(recoilStats) do
-                        local stat = stats:FindFirstChild(statName)
-                        if stat and stat:IsA("NumberValue") then
-                            stat.Value = 0
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    local conn3 = RunService.Heartbeat:Connect(function()
-        if not noRecoilActive then return end
-        pcall(function()
-            -- Обрабатываем все оружие в бекпаке
-            for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
-                processAttachments(tool)
-            end
-            
-            -- Обрабатываем оружие в руках
-            local char = LocalPlayer.Character
-            if char then
-                for _, tool in ipairs(char:GetChildren()) do
-                    processAttachments(tool)
-                end
-            end
-        end)
-    end)
-    table.insert(noRecoilConnections, conn3)
-    
-    -- Метод 4: Блокируем CameraShake
-    local conn4 = RunService.RenderStepped:Connect(function()
-        if not noRecoilActive then return end
-        pcall(function()
-            if not Settings.Aimbot then
-                local recoil = LocalPlayer:FindFirstChild("Recoil")
-                if recoil then
-                    local cr = recoil:FindFirstChild("CurrentRecoil")
-                    local cr2 = recoil:FindFirstChild("CurrentRecoil2")
-                    local cr3 = recoil:FindFirstChild("CurrentRecoil3")
-                    
-                    if cr and cr:IsA("CFrameValue") and cr.Value ~= CFrame.new() then
-                        cr.Value = CFrame.new()
-                    end
-                    if cr2 and cr2:IsA("CFrameValue") and cr2.Value ~= CFrame.new() then
-                        cr2.Value = CFrame.new()
-                    end
-                    if cr3 and cr3:IsA("NumberValue") and cr3.Value ~= 0 then
-                        cr3.Value = 0
-                    end
-                end
-            end
-        end)
-    end)
-    table.insert(noRecoilConnections, conn4)
-    
-    -- Метод 5: Ускоряем анимации отдачи
-    local conn5 = RunService.Heartbeat:Connect(function()
-        if not noRecoilActive then return end
-        pcall(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            if not humanoid then return end
-            
-            for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-                if not track.Animation then continue end
-                local animName = track.Animation.Name or ""
-                if animName:lower():find("fire") or 
-                   animName:lower():find("recoil") or
-                   animName:lower():find("aim") then
-                    track:AdjustSpeed(999)
-                end
-            end
-        end)
-    end)
-    table.insert(noRecoilConnections, conn5)
-    
-    -- Метод 6: Создаём фейковые Value в оружии
-    local conn6 = RunService.Heartbeat:Connect(function()
-        if not noRecoilActive then return end
-        pcall(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            
-            for _, tool in ipairs(char:GetChildren()) do
-                if not tool:IsA("Tool") then continue end
-                
-                local fakeStats = {
-                    GunRecoil = 0,
-                    GunRecoilX = 0,
-                    RecoilAngle = 0,
-                    RecoilSpread = 0,
-                    RecoilStrength = 0,
-                    AimSway = 0
-                }
-                
-                for statName, statValue in pairs(fakeStats) do
-                    local existing = tool:FindFirstChild(statName)
-                    if not existing then
-                        local val = Instance.new("NumberValue")
-                        val.Name = statName
-                        val.Value = statValue
-                        val.Parent = tool
-                    else
-                        existing.Value = statValue
-                    end
-                end
-            end
-        end)
-    end)
-    table.insert(noRecoilConnections, conn6)
-    
-    -- Метод 7: Рекурсивный поиск ВСЕХ прицелов Sights
-    local conn7 = RunService.Heartbeat:Connect(function()
-        if not noRecoilActive then return end
-        pcall(function()
-            local function scanForSights(parent)
-                if not parent then return end
-                for _, child in ipairs(parent:GetChildren()) do
-                    -- Ищем AttachmentFolder
-                    if child:IsA("Folder") and child.Name == "AttachmentFolder" then
-                        for _, attach in ipairs(child:GetChildren()) do
-                            local isAttach = attach:FindFirstChild("IsAttachment")
-                            if isAttach and isAttach:IsA("StringValue") and isAttach.Value == "Sights" then
-                                local stats = attach:FindFirstChild("Stats")
-                                if stats then
-                                    for _, stat in ipairs(stats:GetChildren()) do
-                                        if stat:IsA("NumberValue") then
-                                            local name = stat.Name
-                                            if name:find("Recoil") or 
-                                               name:find("Sway") or 
-                                               name:find("Spread") or
-                                               name:find("Scatter") then
-                                                stat.Value = 0
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                    -- Рекурсивно сканируем вложенные объекты
-                    scanForSights(child)
-                end
-            end
-            
-            scanForSights(LocalPlayer.Backpack)
-            
-            local char = LocalPlayer.Character
-            if char then
-                scanForSights(char)
-            end
-        end)
-    end)
-    table.insert(noRecoilConnections, conn7)
-end
-
--- No Sway
-local swayActive = false
-function setNoSway(v)
     if not v then
-        swayActive = false
+        noRecoilActive = false
+        for _, conn in ipairs(noRecoilConnections) do pcall(function() conn:Disconnect() end) end
+        noRecoilConnections = {}
         return
     end
+    noRecoilActive = true
+
+    -- Сброс текущего отката
+    table.insert(noRecoilConnections, RunService.RenderStepped:Connect(function()
+        if not noRecoilActive then return end
+        local recoil = LocalPlayer:FindFirstChild("Recoil")
+        if not recoil then return end
+        local cr = recoil:FindFirstChild("CurrentRecoil")
+        local cr2 = recoil:FindFirstChild("CurrentRecoil2")
+        local cr3 = recoil:FindFirstChild("CurrentRecoil3")
+        if cr and cr:IsA("CFrameValue") then cr.Value = CFrame.new() end
+        if cr2 and cr2:IsA("CFrameValue") then cr2.Value = CFrame.new() end
+        if cr3 and cr3:IsA("NumberValue") then cr3.Value = 0 end
+    end))
+
+    -- Обнуление GUNAIMVALUE
+    table.insert(noRecoilConnections, RunService.Heartbeat:Connect(function()
+        if not noRecoilActive then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local gav = char:FindFirstChild("GUNAIMVALUE")
+        if gav then
+            for _, c in ipairs(gav:GetChildren()) do
+                if c:IsA("NumberValue") then c.Value = 0 end
+            end
+            if gav:IsA("NumberValue") then gav.Value = 0 end
+        end
+    end))
+
+    -- Обнуление recoil-статов у обвесов
+    local function clearAttachmentStats(tool)
+        if not tool:IsA("Tool") then return end
+        local folder = tool:FindFirstChild("AttachmentFolder")
+        if not folder then return end
+        for _, attachment in ipairs(folder:GetChildren()) do
+            local isAttachment = attachment:FindFirstChild("IsAttachment")
+            if isAttachment and isAttachment.Value == "Sights" then
+                local stats = attachment:FindFirstChild("Stats")
+                if stats then
+                    for _, name in ipairs({
+                        "GunRecoil", "GunRecoilX", "GunRecoilAimed", "RecoilAngle",
+                        "RecoilSpread", "RecoilStrength", "AimSway", "AimSpeed", "AimScatterMultiplyer"
+                    }) do
+                        local stat = stats:FindFirstChild(name)
+                        if stat and stat:IsA("NumberValue") then stat.Value = 0 end
+                    end
+                end
+            end
+        end
+    end
+
+    table.insert(noRecoilConnections, RunService.Heartbeat:Connect(function()
+        if not noRecoilActive then return end
+        local bp = LocalPlayer:FindFirstChild("Backpack")
+        if bp then
+            for _, tool in ipairs(bp:GetChildren()) do clearAttachmentStats(tool) end
+        end
+        local char = LocalPlayer.Character
+        if char then
+            for _, tool in ipairs(char:GetChildren()) do clearAttachmentStats(tool) end
+        end
+    end))
+
+    -- Ускорение fire/recoil/aim анимаций
+    table.insert(noRecoilConnections, RunService.Heartbeat:Connect(function()
+        if not noRecoilActive then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
+        for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+            if not track.Animation then continue end
+            local name = track.Animation.Name:lower()
+            if name:find("fire") or name:find("recoil") or name:find("aim") then
+                track:AdjustSpeed(999)
+            end
+        end
+    end))
+
+    -- Фейковые статы на самом Tool (на случай если игра читает их оттуда)
+    table.insert(noRecoilConnections, RunService.Heartbeat:Connect(function()
+        if not noRecoilActive then return end
+        local char = LocalPlayer.Character
+        if not char then return end
+        for _, tool in ipairs(char:GetChildren()) do
+            if not tool:IsA("Tool") then continue end
+            for name, value in pairs({
+                GunRecoil = 0, GunRecoilX = 0, RecoilAngle = 0,
+                RecoilSpread = 0, RecoilStrength = 0, AimSway = 0
+            }) do
+                local existing = tool:FindFirstChild(name)
+                if existing then
+                    existing.Value = value
+                else
+                    local val = Instance.new("NumberValue")
+                    val.Name = name
+                    val.Value = value
+                    val.Parent = tool
+                end
+            end
+        end
+    end))
+end
+
+--==============================================================
+-- No Sway
+--==============================================================
+local swayActive = false
+function setNoSway(v)
+    if not v then swayActive = false; return end
     swayActive = true
     task.spawn(function()
         while swayActive do
-            pcall(function()
-                local char = LocalPlayer.Character
-                if char then
-                    local gav = char:FindFirstChild("GUNAIMVALUE") or char:FindFirstChild("GunAimValue")
-                    if gav then
-                        for _, c in ipairs(gav:GetChildren()) do
-                            if c:IsA("NumberValue") then 
-                                c.Value = 0
-                            elseif c:IsA("BoolValue") and c.Name:lower():find("aim") then 
-                                c.Value = false 
-                            end
-                        end
-                    end
-                    
-                    for _, obj in ipairs(char:GetDescendants()) do
-                        if obj.Name:lower():find("sway") and obj:IsA("NumberValue") then
-                            obj.Value = 0
-                        end
+            local char = LocalPlayer.Character
+            if char then
+                local gav = char:FindFirstChild("GUNAIMVALUE") or char:FindFirstChild("GunAimValue")
+                if gav then
+                    for _, c in ipairs(gav:GetChildren()) do
+                        if c:IsA("NumberValue") then c.Value = 0
+                        elseif c:IsA("BoolValue") and c.Name:lower():find("aim") then c.Value = false end
                     end
                 end
-            end)
+                for _, obj in ipairs(char:GetDescendants()) do
+                    if obj:IsA("NumberValue") and obj.Name:lower():find("sway") then
+                        obj.Value = 0
+                    end
+                end
+            end
             task.wait()
         end
     end)
 end
 
+--==============================================================
 -- Trigger Bot
+--==============================================================
 local triggerActive = false
-local triggerConn = nil
+local triggerConn
 
 function enableTriggerBot()
     triggerActive = true
     triggerConn = RunService.RenderStepped:Connect(function()
         if not triggerActive then return end
-        pcall(function()
-            local cam = workspace.CurrentCamera
-            if not cam or not LocalPlayer.Character then return end
-            
-            local ray = Ray.new(cam.CFrame.Position, cam.CFrame.LookVector * 1000)
-            local hit, pos = workspace:FindPartOnRay(ray, LocalPlayer.Character)
-            
-            local found = false
-            if hit then
-                local hum = hit.Parent:FindFirstChildOfClass("Humanoid") 
-                    or (hit.Parent.Parent and hit.Parent.Parent:FindFirstChildOfClass("Humanoid"))
-                if hum and hum.Health > 0 and hum.Parent ~= LocalPlayer.Character then 
-                    found = true 
-                end
-            end
-            
-            if found then
-                mouse1press()
-                task.wait(0.05)
-                mouse1release()
-            end
-        end)
+        local cam = workspace.CurrentCamera
+        if not cam or not LocalPlayer.Character then return end
+
+        local ray = Ray.new(cam.CFrame.Position, cam.CFrame.LookVector * 1000)
+        local hit = workspace:FindPartOnRay(ray, LocalPlayer.Character)
+        if not hit then return end
+
+        local hum = hit.Parent:FindFirstChildOfClass("Humanoid")
+            or (hit.Parent.Parent and hit.Parent.Parent:FindFirstChildOfClass("Humanoid"))
+        if hum and hum.Health > 0 and hum.Parent ~= LocalPlayer.Character then
+            mouse1press()
+            task.wait(0.05)
+            mouse1release()
+        end
     end)
 end
 
 function disableTriggerBot()
     triggerActive = false
-    if triggerConn then
-        triggerConn:Disconnect()
-        triggerConn = nil
-    end
+    if triggerConn then triggerConn:Disconnect(); triggerConn = nil end
 end
 
+--==============================================================
 -- Infinite Ammo
+--==============================================================
 local infAmmoActive = false
 function enableInfiniteAmmo()
     infAmmoActive = true
     task.spawn(function()
         while infAmmoActive do
-            pcall(function()
-                local char = LocalPlayer.Character
-                if char then
-                    for _, tool in ipairs(char:GetChildren()) do
-                        if tool:IsA("Tool") then
-                            local gs = tool:FindFirstChild("GunScript") 
-                                or tool:FindFirstChild("Gun") 
-                                or tool:FindFirstChild("WeaponScript")
-                            
-                            if gs then
-                                local ca = gs:FindFirstChild("ClientAmmo") or gs:FindFirstChild("Ammo") or gs:FindFirstChild("CurrentAmmo")
-                                local maxAmmo = gs:FindFirstChild("MaxAmmo") or gs:FindFirstChild("Max") or gs:FindFirstChild("ClipSize")
-                                
-                                if ca then 
-                                    ca.Value = maxAmmo and maxAmmo.Value or 30 
-                                end
-                            end
-                            
-                            local toolAmmo = tool:FindFirstChild("Ammo") or tool:FindFirstChild("ClientAmmo")
-                            local toolMax = tool:FindFirstChild("MaxAmmo") or tool:FindFirstChild("MaxAmmo")
-                            if toolAmmo and toolMax then
-                                toolAmmo.Value = toolMax.Value
+            local char = LocalPlayer.Character
+            if char then
+                for _, tool in ipairs(char:GetChildren()) do
+                    if tool:IsA("Tool") then
+                        local gs = tool:FindFirstChild("GunScript")
+                            or tool:FindFirstChild("Gun")
+                            or tool:FindFirstChild("WeaponScript")
+                        if gs then
+                            local ammo = gs:FindFirstChild("ClientAmmo")
+                                or gs:FindFirstChild("Ammo")
+                                or gs:FindFirstChild("CurrentAmmo")
+                            local maxAmmo = gs:FindFirstChild("MaxAmmo")
+                                or gs:FindFirstChild("Max")
+                                or gs:FindFirstChild("ClipSize")
+                            if ammo then
+                                ammo.Value = maxAmmo and maxAmmo.Value or 30
                             end
                         end
                     end
                 end
-            end)
+            end
             task.wait(0.1)
         end
     end)
 end
 
-function disableInfiniteAmmo() 
-    infAmmoActive = false 
-end
+function disableInfiniteAmmo() infAmmoActive = false end
 
+--==============================================================
 -- Instant Reload
+--==============================================================
 local instantReloadActive = false
 function setInstantReload(v)
-    if not v then 
-        instantReloadActive = false
-        return 
-    end
+    if not v then instantReloadActive = false; return end
     instantReloadActive = true
     task.spawn(function()
         while instantReloadActive do
-            pcall(function()
-                local char = LocalPlayer.Character
-                if not char then return end
+            local char = LocalPlayer.Character
+            if char then
                 local humanoid = char:FindFirstChildOfClass("Humanoid")
-                if not humanoid then return end
-                
-                for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-                    local animName = track.Animation and track.Animation.Name or ""
-                    if animName:lower():find("reload") 
-                        or animName:lower():find("bolt") 
-                        or animName:lower():find("cock") then
-                        track:AdjustSpeed(10)
-                    end
-                end
-                
-                for _, tool in ipairs(char:GetChildren()) do
-                    if tool:IsA("Tool") then
-                        local gs = tool:FindFirstChild("GunScript") or tool:FindFirstChild("Gun")
-                        if gs then
-                            local clientAmmo = gs:FindFirstChild("ClientAmmo") or gs:FindFirstChild("Ammo")
-                            local maxAmmo = gs:FindFirstChild("MaxAmmo") or gs:FindFirstChild("Max")
-                            if clientAmmo and maxAmmo and clientAmmo.Value <= 0 then
-                                clientAmmo.Value = maxAmmo.Value
-                            end
+                if humanoid then
+                    for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+                        local name = track.Animation and track.Animation.Name:lower() or ""
+                        if name:find("reload") or name:find("bolt") or name:find("cock") then
+                            track:AdjustSpeed(10)
                         end
                     end
                 end
-            end)
+            end
             task.wait(0.05)
         end
     end)
 end
 
+--==============================================================
 -- No Spread
+--
+-- scatter и AimScatterMultiplyer — делители в GunScript.fireBullet.
+-- 0 -> деление на 0 -> NaN -> raycast nil -> 0 урона.
+-- 0.0001 -> почти нулевой разброс, но без NaN.
+-- AimScatterMultiplyer не трогаем — он тоже делитель.
+--==============================================================
 local noSpreadActive = false
-function setNoSpread(v)
-    if not v then 
-        noSpreadActive = false
-        return 
+local noSpreadConnections = {}
+
+local function patchNoSpread(tool)
+    if not tool:IsA("Tool") then return end
+    local settingsModule = tool:FindFirstChild("Settings")
+    if not settingsModule then return end
+
+    local ok, config = pcall(require, settingsModule)
+    if not ok or type(config) ~= "table" then return end
+
+    if config.scatter ~= nil then
+        config.scatter = 0.0001
     end
-    noSpreadActive = true
-    task.spawn(function()
-        while noSpreadActive do
-            pcall(function()
-                local char = LocalPlayer.Character
-                if not char then return end
-                
-                for _, tool in ipairs(char:GetChildren()) do
-                    if tool:IsA("Tool") then
-                        local gs = tool:FindFirstChild("GunScript") or tool:FindFirstChild("Gun")
-                        if gs then
-                            local scatter = gs:FindFirstChild("scatter") 
-                                or gs:FindFirstChild("Spread") 
-                                or gs:FindFirstChild("BulletSpread")
-                            
-                            if scatter and scatter:IsA("NumberValue") then 
-                                scatter.Value = 0 
-                            end
-                            
-                            local aimScatter = gs:FindFirstChild("AimScatterMultiplyer") 
-                                or gs:FindFirstChild("AimSpread")
-                            
-                            if aimScatter and aimScatter:IsA("NumberValue") then 
-                                aimScatter.Value = 0 
-                            end
-                        end
-                    end
-                end
-            end)
-            task.wait(0.1)
-        end
-    end)
 end
 
--- Crosshair (старый — только точка)
-local crosshairGui = nil
+local function patchAllNoSpread()
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if bp then
+        for _, tool in ipairs(bp:GetChildren()) do patchNoSpread(tool) end
+    end
+    local char = LocalPlayer.Character
+    if char then
+        for _, tool in ipairs(char:GetChildren()) do patchNoSpread(tool) end
+    end
+end
+
+function setNoSpread(v)
+    if not v then
+        noSpreadActive = false
+        for _, conn in ipairs(noSpreadConnections) do pcall(function() conn:Disconnect() end) end
+        noSpreadConnections = {}
+        return
+    end
+    noSpreadActive = true
+
+    patchAllNoSpread()
+
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if bp then
+        table.insert(noSpreadConnections, bp.ChildAdded:Connect(function(tool)
+            task.wait(0.05)
+            if noSpreadActive then patchNoSpread(tool) end
+        end))
+    end
+
+    table.insert(noSpreadConnections, LocalPlayer.CharacterAdded:Connect(function(char)
+        table.insert(noSpreadConnections, char.ChildAdded:Connect(function(tool)
+            task.wait(0.05)
+            if noSpreadActive then patchNoSpread(tool) end
+        end))
+        task.wait(0.5)
+        if noSpreadActive then patchAllNoSpread() end
+    end))
+
+    if LocalPlayer.Character then
+        table.insert(noSpreadConnections, LocalPlayer.Character.ChildAdded:Connect(function(tool)
+            task.wait(0.05)
+            if noSpreadActive then patchNoSpread(tool) end
+        end))
+    end
+end
+
+--==============================================================
+-- Crosshair
+--==============================================================
+local crosshairGui
 function createCrosshair()
     if crosshairGui then return end
     crosshairGui = Instance.new("ScreenGui")
     crosshairGui.Name = "Crosshair"
     crosshairGui.ResetOnSpawn = false
     crosshairGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-    
+
     local dot = Instance.new("Frame")
     dot.Size = UDim2.new(0, 4, 0, 4)
     dot.Position = UDim2.new(0.5, -2, 0.5, -32)
     dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     dot.BorderSizePixel = 0
     dot.Parent = crosshairGui
-    
+
     Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
 end
 
 function removeCrosshair()
-    if crosshairGui then 
-        crosshairGui:Destroy()
-        crosshairGui = nil 
-    end
+    if crosshairGui then crosshairGui:Destroy(); crosshairGui = nil end
 end
 
--- Wall Check
-local function canSeeTarget(part)
-    if not Settings.AimbotWallCheck then return true end
-    local char = LocalPlayer.Character
-    if not char then return true end
-    local head = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-    if not head then return true end
-    
-    local origin = head.Position
-    local dir = (part.Position - origin).Unit
-    local dist = (part.Position - origin).Magnitude
-    
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterDescendantsInstances = {char}
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    
-    local result = workspace:Raycast(origin, dir * dist, raycastParams)
-    
-    if result then
-        return result.Instance:IsDescendantOf(part.Parent)
-    end
-    return true
-end
+--==============================================================
+-- Silent Aim
+--==============================================================
+local silentTarget
 
--- Check if player is Passive
-local function isPassive(plr)
-    if not plr.Character then return false end
-    
-    local playerFolder = workspace:FindFirstChild(plr.Name)
-    if playerFolder then
-        local passive = playerFolder:FindFirstChild("Passive")
-        if passive and passive:IsA("BoolValue") and passive.Value == true then
-            return true
-        end
-    end
-    
-    local charPassive = plr.Character:FindFirstChild("Passive")
-    if charPassive and charPassive:IsA("BoolValue") and charPassive.Value == true then
-        return true
-    end
-    
-    return false
-end
+local function getSilentTarget()
+    local myChar = LocalPlayer.Character
+    if not myChar then return nil end
 
--- Check if player is friend
-local function isFriend(plr)
-    if not Settings.AimbotIgnoreFriends then return false end
-    return LocalPlayer:IsFriendsWith(plr.UserId)
-end
+    local cam = workspace.CurrentCamera
+    if not cam then return nil end
 
--- Get target part
-local function getTargetPart(char, partName)
-    if partName == "Head" then 
-        return char:FindFirstChild("Head")
-    elseif partName == "UpperTorso" then 
-        return char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
-    elseif partName == "HumanoidRootPart" then 
-        return char:FindFirstChild("HumanoidRootPart")
-    end
-    return char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-end
-
--- Get valid targets
-local function getValidTargets(partName)
-    local targets = {}
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character then
-            if Settings.AimbotIgnorePassive and isPassive(plr) then
-                continue
-            end
-            
-            if isFriend(plr) then
-                continue
-            end
-            
-            local part = getTargetPart(plr.Character, partName)
-            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            if part and hum and hum.Health > 0 then
-                table.insert(targets, {part = part, hum = hum, player = plr})
-            end
-        end
-    end
-    return targets
-end
-
--- Smooth aim
-local currentAimTarget = nil
-local function smoothAim(cam, targetPos, smoothAmount)
+    local closestDist = Settings.SilentAimFOV
+    local closestPart
+    local mousePos = UserInputService:GetMouseLocation()
     local camPos = cam.CFrame.Position
-    local currentLook = cam.CFrame.LookVector
-    local targetLook = (targetPos - camPos).Unit
-    
-    local t = smoothAmount / 100
-    t = math.clamp(t, 0.01, 1)
-    
-    local smoothedLook = currentLook:Lerp(targetLook, t)
-    cam.CFrame = CFrame.new(camPos, camPos + smoothedLook)
-end
 
--- Aimbot
-local aimbotActive = false
-local aimbotConn = nil
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        if Settings.SilentAimIgnoreFriends and LocalPlayer:IsFriendsWith(plr.UserId) then continue end
 
-function enableAimbot()
-    aimbotActive = true
-    if aimbotConn then aimbotConn:Disconnect() end
-    
-    aimbotConn = RunService.RenderStepped:Connect(function()
-        if not aimbotActive then return end
-        pcall(function()
-            local cam = workspace.CurrentCamera
-            if not cam or not LocalPlayer.Character then return end
-            
-            local camPos = cam.CFrame.Position
-            local camDir = cam.CFrame.LookVector
-            local targets = getValidTargets(Settings.AimbotPart)
-            
-            if #targets == 0 then 
-                currentAimTarget = nil
-                return 
-            end
-            
-            local best = nil
-            local bestValue = math.huge
-            
-            for _, t in ipairs(targets) do
-                if not canSeeTarget(t.part) then continue end
-                
-                local toTarget = (t.part.Position - camPos).Unit
-                local angle = math.deg(math.acos(math.clamp(camDir:Dot(toTarget), -1, 1)))
-                
-                if angle >= Settings.AimbotFOV / 2 then continue end                
-                local value
-                if Settings.AimbotPriority == "Distance" then
-                    value = (t.part.Position - camPos).Magnitude
-                elseif Settings.AimbotPriority == "FOV" then
-                    value = angle
-                elseif Settings.AimbotPriority == "Health" then
-                    value = t.hum.Health
-                end
-                
-                if value < bestValue then
-                    bestValue = value
-                    best = t
+        local char = plr.Character
+        if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+        local part = char:FindFirstChild(Settings.SilentAimPart)
+        if not part then continue end
+
+        if Settings.SilentAimWallCheck then
+            local params = RaycastParams.new()
+            params.FilterDescendantsInstances = {myChar, cam}
+            params.FilterType = Enum.RaycastFilterType.Blacklist
+            params.IgnoreWater = true
+
+            local dir = part.Position - camPos
+            local result = workspace:Raycast(camPos, dir, params)
+            if result and result.Instance and not result.Instance:IsDescendantOf(char) then
+                if (result.Position - camPos).Magnitude < dir.Magnitude - 1 then
+                    continue
                 end
             end
-            
-            if best then 
-                currentAimTarget = best.player
-                if Settings.AimbotSmooth then
-                    smoothAim(cam, best.part.Position, Settings.AimbotSmoothAmount)
-                else
-                    cam.CFrame = CFrame.new(camPos, best.part.Position)
-                end
-            else
-                currentAimTarget = nil
-            end
-        end)
-    end)
-end
+        end
 
-function disableAimbot()
-    aimbotActive = false
-    currentAimTarget = nil
-    if aimbotConn then 
-        aimbotConn:Disconnect()
-        aimbotConn = nil 
+        local screenPos, onScreen = cam:WorldToViewportPoint(part.Position)
+        if not onScreen then continue end
+
+        local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+        if dist < closestDist then
+            closestDist = dist
+            closestPart = part
+        end
     end
+    return closestPart
 end
 
--- Respawn handler
+RunService.RenderStepped:Connect(function()
+    if Settings.SilentAim then
+        silentTarget = getSilentTarget()
+    else
+        silentTarget = nil
+    end
+
+    if silentTarget then
+        local name = silentTarget.Parent and silentTarget.Parent.Name or "?"
+        silentLabel.Text = ("SA Target: %s (%s)"):format(name, silentTarget.Name)
+    else
+        silentLabel.Text = "SA Target: none"
+    end
+end)
+
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+
+    if method == "Raycast" and self == Workspace
+        and Settings.SilentAim and silentTarget and silentTarget.Parent then
+        local args = {...}
+        local origin = args[1]
+        local direction = args[2]
+        if origin and direction then
+            args[2] = (silentTarget.Position - origin).Unit * direction.Magnitude
+            return oldNamecall(self, unpack(args))
+        end
+    end
+
+    return oldNamecall(self, ...)
+end))
+
+--==============================================================
+-- Hotkey
+--==============================================================
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode[Settings.SilentAimKey] then
+        Settings.SilentAim = not Settings.SilentAim
+        save()
+    end
+end)
+
+--==============================================================
+-- Respawn handling
+--==============================================================
+LocalPlayer.CharacterRemoving:Connect(function()
+    silentTarget = nil
+end)
+
 LocalPlayer.CharacterAdded:Connect(function()
+    silentTarget = nil
     task.wait(0.5)
-    
     if crosshairGui and not crosshairGui.Parent then
         crosshairGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
     end
-    
     updateFOVCircle()
 end)
 
--- НИЧЕГО не включаем при загрузке
 updateFOVCircle()
