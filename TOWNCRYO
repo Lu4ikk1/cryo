@@ -77,8 +77,6 @@ CombatTab:CreateColorPicker("FOV Color", Settings.SilentAimFOVColor, function(c)
     pcall(updateFOVCircle)
 end)
 
-local silentLabel = CombatTab:CreateLabel("SA Target: none")
-
 CombatTab:CreateLabel("Weapon")
 CombatTab:CreateToggle("No Recoil", function(v) Settings.NoRecoil = v; save(); setNoRecoil(v) end)
 CombatTab:CreateToggle("No Sway", function(v) Settings.NoSway = v; save(); setNoSway(v) end)
