@@ -1,9 +1,8 @@
-
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
-local MAIN_URL = "https://raw.githubusercontent.com/Lu4ikk1/cryo/refs/heads/main/TOWNCRYO"
+local MAIN_URL = "loadstring(game:HttpGet("https://raw.githubusercontent.com/Lu4ikk1/cryo/refs/heads/main/TOWNCRYO"))()"
 
 task.spawn(function()
     local hooked = {}
