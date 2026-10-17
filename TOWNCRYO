@@ -1,59 +1,24 @@
 --==============================================================
--- Cryo Hub
+-- PRELOADER + AC BYPASS
+-- (AC bypass запускается сразу при загрузке лоадера)
 --==============================================================
+local preloader = loadstring(game:HttpGet("URL_ТВОЕГО_ЛОАДЕРА"))()
 
--- Anti-cheat bypass
-task.spawn(function()
-    local hooked = {}
-    local lastGcCount = 0
-    local lastScanAt = tick()
-
-    local function scan()
-        local gc = getgc(true)
-        if type(gc) ~= "table" then return end
-
-        for _, v in pairs(gc) do
-            if type(v) ~= "table" then continue end
-
-            local detected = rawget(v, "Detected")
-            if type(detected) == "function" and not hooked[detected] then
-                hooked[detected] = true
-                pcall(hookfunction, detected, function() return end)
-            end
-
-            local kill = rawget(v, "Kill")
-            if type(kill) == "function" and not hooked[kill] then
-                hooked[kill] = true
-                pcall(hookfunction, kill, function() return end)
-            end
-        end
-
-        lastGcCount = #gc
-    end
-
-    scan()
-
-    while true do
-        task.wait(0.5)
-        local gc = getgc(true)
-        local count = type(gc) == "table" and #gc or 0
-
-        if count > lastGcCount or tick() - lastScanAt > 5 then
-            scan()
-            lastScanAt = tick()
-        end
-    end
-end)
-
+--==============================================================
+-- LIB
+--==============================================================
 local CryoLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/xlebaaa3-netizen/UIMAIN/refs/heads/main/CRYOLIB"))()
 
-local Players          = game:GetService("Players")
-local RunService       = game:GetService("RunService")
-local Lighting         = game:GetService("Lighting")
-local Workspace        = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local LocalPlayer      = Players.LocalPlayer
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
 
+--==============================================================
+-- SETTINGS
+--==============================================================
 local Settings = _G.UltimateSettings or {
     NoRecoil = false, NoSway = false, TriggerBot = false,
     InfiniteAmmo = false, InstantReload = false, NoSpread = false,
@@ -68,23 +33,61 @@ local Settings = _G.UltimateSettings or {
 
 local function save() _G.UltimateSettings = Settings end
 
+--==============================================================
+-- WINDOW
+--==============================================================
 local Window = CryoLib:CreateWindow("Cryo Hub")
 if Settings.UIKey ~= "K" then Window:SetGuiKey(Settings.UIKey) end
 
+-- скрываем окно до скрытия прелоадера
+if _G.CryoLibScreenGui then
+    _G.CryoLibScreenGui.Enabled = false
+end
+
 --==============================================================
--- Combat
+-- COMBAT
 --==============================================================
 local CombatTab = Window:CreateTab("Combat")
 
 CombatTab:CreateLabel("Silent Aim")
-CombatTab:CreateToggle("Silent Aim", function(v) Settings.SilentAim = v; save() end)
-CombatTab:CreateKeybind("Silent Aim Hotkey", Settings.SilentAimKey, function(key) Settings.SilentAimKey = key; save() end)
-CombatTab:CreateSlider("FOV", 10, 500, Settings.SilentAimFOV, function(v) Settings.SilentAimFOV = v; save(); updateFOVCircle() end)
-CombatTab:CreateDropdown("Aim Part", {"Head", "UpperTorso", "HumanoidRootPart"}, false, function(v) Settings.SilentAimPart = v; save() end)
+
+local silentAimToggle
+silentAimToggle = CombatTab:CreateToggle("Silent Aim", function(v)
+    if Settings.SilentAim ~= v then
+        Settings.SilentAim = v
+        save()
+        pcall(updateFOVCircle)
+    end
+end)
+
+CombatTab:CreateKeybind("Silent Aim Hotkey", Settings.SilentAimKey, function(key)
+    Settings.SilentAimKey = key
+    Settings.SilentAim = not Settings.SilentAim
+    silentAimToggle:Set(Settings.SilentAim)
+    save()
+    pcall(updateFOVCircle)
+end)
+
+CombatTab:CreateSlider("FOV", 10, 500, Settings.SilentAimFOV, function(v)
+    Settings.SilentAimFOV = v
+    save()
+    pcall(updateFOVCircle)
+end)
+
+CombatTab:CreateDropdown("Aim Part", {"Head", "UpperTorso", "HumanoidRootPart"}, false, function(v)
+    Settings.SilentAimPart = v
+    save()
+end)
+
 CombatTab:CreateToggle("Wall Check", function(v) Settings.SilentAimWallCheck = v; save() end)
 CombatTab:CreateToggle("Ignore Friends", function(v) Settings.SilentAimIgnoreFriends = v; save() end)
-CombatTab:CreateToggle("FOV Circle", function(v) Settings.SilentAimFOVCircle = v; save(); updateFOVCircle() end)
-CombatTab:CreateColorPicker("FOV Color", Settings.SilentAimFOVColor, function(c) Settings.SilentAimFOVColor = c; save(); updateFOVCircle() end)
+CombatTab:CreateToggle("FOV Circle", function(v) Settings.SilentAimFOVCircle = v; save(); pcall(updateFOVCircle) end)
+CombatTab:CreateColorPicker("FOV Color", Settings.SilentAimFOVColor, function(c)
+    Settings.SilentAimFOVColor = c
+    save()
+    pcall(updateFOVCircle)
+end)
+
 local silentLabel = CombatTab:CreateLabel("SA Target: none")
 
 CombatTab:CreateLabel("Weapon")
@@ -96,7 +99,7 @@ CombatTab:CreateToggle("Instant Reload", function(v) Settings.InstantReload = v;
 CombatTab:CreateToggle("No Spread", function(v) Settings.NoSpread = v; save(); setNoSpread(v) end)
 
 --==============================================================
--- Visuals
+-- VISUALS
 --==============================================================
 local VisualsTab = Window:CreateTab("Visuals")
 
@@ -108,7 +111,7 @@ VisualsTab:CreateToggle("Show Name", function(v) Settings.ESPShowName = v; save(
 VisualsTab:CreateToggle("Show Distance", function(v) Settings.ESPShowDistance = v; save() end)
 
 --==============================================================
--- Misc
+-- MISC
 --==============================================================
 local MiscTab = Window:CreateTab("Misc")
 
@@ -118,17 +121,26 @@ MiscTab:CreateToggle("Crosshair", function(v) Settings.Crosshair = v; save(); if
 
 local InfoTab = Window:CreateTab("Info")
 InfoTab:CreateLabel("Thanks You Lu4ikk1")
-InfoTab:CreateKeybind("UI Key", Settings.UIKey, function(key) Settings.UIKey = key; save(); Window:SetGuiKey(key) end)
+InfoTab:CreateKeybind("UI Key", Settings.UIKey, function(key)
+    if key == "None" or key == "..." then return end
+    Settings.UIKey = key
+    save()
+    Window:SetGuiKey(key)
+end)
 
 --==============================================================
--- FOV circle
+-- FOV CIRCLE
 --==============================================================
 local FOVCircle
 function updateFOVCircle()
     if FOVCircle then pcall(function() FOVCircle:Remove() end); FOVCircle = nil end
     if not (Settings.SilentAim and Settings.SilentAimFOVCircle) then return end
+    if not Drawing or not Drawing.new then return end
 
-    FOVCircle = Drawing.new("Circle")
+    local ok, circle = pcall(function() return Drawing.new("Circle") end)
+    if not ok or not circle then return end
+
+    FOVCircle = circle
     FOVCircle.Thickness = 1.5
     FOVCircle.Transparency = 0.7
     FOVCircle.ZIndex = 10
@@ -151,7 +163,7 @@ function updateFOVCircle()
 end
 
 --==============================================================
--- Lighting
+-- LIGHTING
 --==============================================================
 function setFullBright(v)
     Lighting.Brightness = v and 3 or 1
@@ -276,7 +288,7 @@ function disableESP()
 end
 
 --==============================================================
--- No Recoil
+-- NO RECOIL
 --==============================================================
 local noRecoilActive = false
 local noRecoilConnections = {}
@@ -290,7 +302,6 @@ function setNoRecoil(v)
     end
     noRecoilActive = true
 
-    -- Сброс текущего отката
     table.insert(noRecoilConnections, RunService.RenderStepped:Connect(function()
         if not noRecoilActive then return end
         local recoil = LocalPlayer:FindFirstChild("Recoil")
@@ -303,7 +314,6 @@ function setNoRecoil(v)
         if cr3 and cr3:IsA("NumberValue") then cr3.Value = 0 end
     end))
 
-    -- Обнуление GUNAIMVALUE
     table.insert(noRecoilConnections, RunService.Heartbeat:Connect(function()
         if not noRecoilActive then return end
         local char = LocalPlayer.Character
@@ -317,7 +327,6 @@ function setNoRecoil(v)
         end
     end))
 
-    -- Обнуление recoil-статов у обвесов
     local function clearAttachmentStats(tool)
         if not tool:IsA("Tool") then return end
         local folder = tool:FindFirstChild("AttachmentFolder")
@@ -351,7 +360,6 @@ function setNoRecoil(v)
         end
     end))
 
-    -- Ускорение fire/recoil/aim анимаций
     table.insert(noRecoilConnections, RunService.Heartbeat:Connect(function()
         if not noRecoilActive then return end
         local char = LocalPlayer.Character
@@ -367,7 +375,6 @@ function setNoRecoil(v)
         end
     end))
 
-    -- Фейковые статы на самом Tool (на случай если игра читает их оттуда)
     table.insert(noRecoilConnections, RunService.Heartbeat:Connect(function()
         if not noRecoilActive then return end
         local char = LocalPlayer.Character
@@ -393,7 +400,7 @@ function setNoRecoil(v)
 end
 
 --==============================================================
--- No Sway
+-- NO SWAY
 --==============================================================
 local swayActive = false
 function setNoSway(v)
@@ -422,7 +429,7 @@ function setNoSway(v)
 end
 
 --==============================================================
--- Trigger Bot
+-- TRIGGER BOT
 --==============================================================
 local triggerActive = false
 local triggerConn
@@ -454,7 +461,7 @@ function disableTriggerBot()
 end
 
 --==============================================================
--- Infinite Ammo
+-- INFINITE AMMO
 --==============================================================
 local infAmmoActive = false
 function enableInfiniteAmmo()
@@ -490,7 +497,7 @@ end
 function disableInfiniteAmmo() infAmmoActive = false end
 
 --==============================================================
--- Instant Reload
+-- INSTANT RELOAD
 --==============================================================
 local instantReloadActive = false
 function setInstantReload(v)
@@ -516,12 +523,7 @@ function setInstantReload(v)
 end
 
 --==============================================================
--- No Spread
---
--- scatter и AimScatterMultiplyer — делители в GunScript.fireBullet.
--- 0 -> деление на 0 -> NaN -> raycast nil -> 0 урона.
--- 0.0001 -> почти нулевой разброс, но без NaN.
--- AimScatterMultiplyer не трогаем — он тоже делитель.
+-- NO SPREAD
 --==============================================================
 local noSpreadActive = false
 local noSpreadConnections = {}
@@ -530,10 +532,8 @@ local function patchNoSpread(tool)
     if not tool:IsA("Tool") then return end
     local settingsModule = tool:FindFirstChild("Settings")
     if not settingsModule then return end
-
     local ok, config = pcall(require, settingsModule)
     if not ok or type(config) ~= "table" then return end
-
     if config.scatter ~= nil then
         config.scatter = 0.0001
     end
@@ -558,7 +558,6 @@ function setNoSpread(v)
         return
     end
     noSpreadActive = true
-
     patchAllNoSpread()
 
     local bp = LocalPlayer:FindFirstChild("Backpack")
@@ -587,7 +586,7 @@ function setNoSpread(v)
 end
 
 --==============================================================
--- Crosshair
+-- CROSSHAIR
 --==============================================================
 local crosshairGui
 function createCrosshair()
@@ -603,7 +602,6 @@ function createCrosshair()
     dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     dot.BorderSizePixel = 0
     dot.Parent = crosshairGui
-
     Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
 end
 
@@ -612,7 +610,7 @@ function removeCrosshair()
 end
 
 --==============================================================
--- Silent Aim
+-- SILENT AIM
 --==============================================================
 local silentTarget
 
@@ -668,7 +666,8 @@ end
 
 RunService.RenderStepped:Connect(function()
     if Settings.SilentAim then
-        silentTarget = getSilentTarget()
+        local ok, target = pcall(getSilentTarget)
+        silentTarget = ok and target or nil
     else
         silentTarget = nil
     end
@@ -700,18 +699,7 @@ oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
 end))
 
 --==============================================================
--- Hotkey
---==============================================================
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    if input.KeyCode == Enum.KeyCode[Settings.SilentAimKey] then
-        Settings.SilentAim = not Settings.SilentAim
-        save()
-    end
-end)
-
---==============================================================
--- Respawn handling
+-- RESPAWN
 --==============================================================
 LocalPlayer.CharacterRemoving:Connect(function()
     silentTarget = nil
@@ -723,7 +711,16 @@ LocalPlayer.CharacterAdded:Connect(function()
     if crosshairGui and not crosshairGui.Parent then
         crosshairGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
     end
-    updateFOVCircle()
+    pcall(updateFOVCircle)
 end)
 
-updateFOVCircle()
+pcall(updateFOVCircle)
+
+--==============================================================
+-- HIDE PRELOADER + SHOW UI
+--==============================================================
+task.wait(1)
+preloader.Hide()
+if _G.CryoLibScreenGui then
+    _G.CryoLibScreenGui.Enabled = true
+end
