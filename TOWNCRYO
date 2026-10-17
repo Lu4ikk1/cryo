@@ -52,7 +52,6 @@ end)
 CombatTab:CreateKeybind("Silent Aim Hotkey", Settings.SilentAimKey, function(key)
     Settings.SilentAimKey = key
     Settings.SilentAim = not Settings.SilentAim
-    silentAimToggle:Set(Settings.SilentAim)
     save()
     pcall(updateFOVCircle)
 end)
