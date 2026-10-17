@@ -662,13 +662,6 @@ RunService.RenderStepped:Connect(function()
     else
         silentTarget = nil
     end
-
-    if silentTarget then
-        local name = silentTarget.Parent and silentTarget.Parent.Name or "?"
-        silentLabel.Text = ("SA Target: %s (%s)"):format(name, silentTarget.Name)
-    else
-        silentLabel.Text = "SA Target: none"
-    end
 end)
 
 local oldNamecall
