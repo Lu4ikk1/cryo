@@ -22,7 +22,9 @@ local Settings = _G.UltimateSettings or {
     SilentAim = false, SilentAimPart = "Head", SilentAimFOV = 200,
     SilentAimKey = "T", SilentAimWallCheck = false,
     SilentAimIgnoreFriends = false, SilentAimFOVColor = Color3.fromRGB(255, 0, 0),
-    SilentAimFOVCircle = false
+    SilentAimFOVCircle = false,
+    SilentAimRandomPart = false,
+    SilentAimPriority = "FOV"
 }
 
 local function save() _G.UltimateSettings = Settings end
@@ -34,13 +36,24 @@ local Window = CryoLib:CreateWindow("Cryo Hub")
 if Settings.UIKey ~= "K" then Window:SetGuiKey(Settings.UIKey) end
 
 --==============================================================
--- COMBAT
+-- COMBAT TAB
 --==============================================================
 local CombatTab = Window:CreateTab("Combat")
 
 CombatTab:CreateLabel("Silent Aim")
 
 local silentAimToggle
+
+local function setSilentAim(v)
+    if Settings.SilentAim == v then return end
+    Settings.SilentAim = v
+    save()
+    pcall(updateFOVCircle)
+    if silentAimToggle then
+        silentAimToggle:Set(v)
+    end
+end
+
 silentAimToggle = CombatTab:CreateToggle("Silent Aim", function(v)
     if Settings.SilentAim ~= v then
         Settings.SilentAim = v
@@ -51,12 +64,7 @@ end)
 
 CombatTab:CreateKeybind("Silent Aim Hotkey", Settings.SilentAimKey, function(key)
     Settings.SilentAimKey = key
-    Settings.SilentAim = not Settings.SilentAim
-    if silentAimToggle and silentAimToggle.Get() ~= Settings.SilentAim then
-        silentAimToggle:Set(Settings.SilentAim)
-    end
-    save()
-    pcall(updateFOVCircle)
+    setSilentAim(not Settings.SilentAim)
 end)
 
 CombatTab:CreateSlider("FOV", 10, 500, Settings.SilentAimFOV, function(v)
@@ -67,6 +75,16 @@ end)
 
 CombatTab:CreateDropdown("Aim Part", {"Head", "UpperTorso", "HumanoidRootPart"}, false, function(v)
     Settings.SilentAimPart = v
+    save()
+end)
+
+CombatTab:CreateToggle("Random Body Part", function(v)
+    Settings.SilentAimRandomPart = v
+    save()
+end)
+
+CombatTab:CreateDropdown("Priority", {"FOV", "Distance", "Health"}, false, function(v)
+    Settings.SilentAimPriority = v
     save()
 end)
 
@@ -88,7 +106,7 @@ CombatTab:CreateToggle("Instant Reload", function(v) Settings.InstantReload = v;
 CombatTab:CreateToggle("No Spread", function(v) Settings.NoSpread = v; save(); setNoSpread(v) end)
 
 --==============================================================
--- VISUALS
+-- VISUALS TAB
 --==============================================================
 local VisualsTab = Window:CreateTab("Visuals")
 
@@ -100,7 +118,7 @@ VisualsTab:CreateToggle("Show Name", function(v) Settings.ESPShowName = v; save(
 VisualsTab:CreateToggle("Show Distance", function(v) Settings.ESPShowDistance = v; save() end)
 
 --==============================================================
--- MISC
+-- MISC TAB
 --==============================================================
 local MiscTab = Window:CreateTab("Misc")
 
@@ -118,7 +136,7 @@ InfoTab:CreateKeybind("UI Key", Settings.UIKey, function(key)
 end)
 
 --==============================================================
--- FOV CIRCLE (фикс: появляется сразу, защита от Drawing = nil)
+-- FOV CIRCLE
 --==============================================================
 local FOVCircle
 function updateFOVCircle()
@@ -603,9 +621,28 @@ function removeCrosshair()
 end
 
 --==============================================================
--- SILENT AIM target (фикс Wall Check + проверка Character)
+-- SILENT AIM target (Random Part + Priority + Wall Check)
 --==============================================================
+local RANDOM_PARTS = {
+    "Head", "UpperTorso", "LowerTorso", "HumanoidRootPart",
+    "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm",
+    "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg"
+}
+
+local lastTargetPart = {}
 local silentTarget
+
+local function pickRandomPart(char)
+    local available = {}
+    for _, name in ipairs(RANDOM_PARTS) do
+        local p = char:FindFirstChild(name)
+        if p and p:IsA("BasePart") then
+            table.insert(available, p)
+        end
+    end
+    if #available == 0 then return nil end
+    return available[math.random(1, #available)]
+end
 
 local function getSilentTarget()
     local myChar = LocalPlayer.Character
@@ -614,10 +651,14 @@ local function getSilentTarget()
     local cam = workspace.CurrentCamera
     if not cam then return nil end
 
-    local closestDist = Settings.SilentAimFOV
-    local closestPart
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
     local mousePos = UserInputService:GetMouseLocation()
     local camPos = cam.CFrame.Position
+
+    local bestPart = nil
+    local bestScore = math.huge
 
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
@@ -627,7 +668,19 @@ local function getSilentTarget()
         if not char then continue end
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then continue end
-        local part = char:FindFirstChild(Settings.SilentAimPart)
+
+        local part
+        if Settings.SilentAimRandomPart then
+            local cached = lastTargetPart[plr]
+            if cached and cached.Parent == char then
+                part = cached
+            else
+                part = pickRandomPart(char)
+                lastTargetPart[plr] = part
+            end
+        else
+            part = char:FindFirstChild(Settings.SilentAimPart) or char:FindFirstChild("Head")
+        end
         if not part then continue end
 
         if Settings.SilentAimWallCheck then
@@ -648,13 +701,31 @@ local function getSilentTarget()
         local screenPos, onScreen = cam:WorldToViewportPoint(part.Position)
         if not onScreen then continue end
 
-        local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-        if dist < closestDist then
-            closestDist = dist
-            closestPart = part
+        local fovDist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+        if fovDist > Settings.SilentAimFOV then continue end
+
+        local score
+        if Settings.SilentAimPriority == "Distance" then
+            score = (part.Position - myRoot.Position).Magnitude
+        elseif Settings.SilentAimPriority == "Health" then
+            score = hum.Health
+        else
+            score = fovDist
+        end
+
+        if score < bestScore then
+            bestScore = score
+            bestPart = part
         end
     end
-    return closestPart
+
+    for plr, part in pairs(lastTargetPart) do
+        if not plr.Parent or not plr.Character or part.Parent ~= plr.Character then
+            lastTargetPart[plr] = nil
+        end
+    end
+
+    return bestPart
 end
 
 RunService.RenderStepped:Connect(function()
